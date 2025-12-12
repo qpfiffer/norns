@@ -197,5 +197,6 @@ void dev_serial_send(struct dev_serial *d, const char *line, size_t len) {
     if (d == NULL) {
         return;
     }
-    write(d->fd, line, len);
+    int val = write(d->fd, line, len);
+    (void)val;
 }
