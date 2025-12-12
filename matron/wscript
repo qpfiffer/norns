@@ -86,14 +86,12 @@ def build(bld):
         matron_libs += ['stdc++']
         matron_use += ['LIBLINK_C']
 
-    matron_cflags=['-O3', '-Wall', '-std=c11', '-mfpu=neon']
+    matron_cflags=['-O3', '-std=c11']
 
     if bld.env.NORNS_RELEASE:
         matron_cflags += [
-            '-mcpu=cortex-a53',
-            '-mtune=cortex-a53',
-            '-mfpu=neon-fp-armv8',
-            '-mfloat-abi=hard',
+            "-Wno-unused-result",
+            "-Wno-format-security"
         ]
 
     if bld.env.PROFILE_MATRON:
