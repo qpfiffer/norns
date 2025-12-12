@@ -195,7 +195,8 @@ void *adc_read(void *x) {
             fprintf(stderr, "ERROR (i2c/adc) failed to write\n");
             break;
         }
-        read(file, buf, 2);
+        const size_t val = read(file, buf, 2);
+        (void)val;
         now[i] = ((buf[0] << 4) + (buf[1] >> 4));
     }
     for (int i = 0; i < 3; i++) {
@@ -213,7 +214,8 @@ void *adc_read(void *x) {
                 fprintf(stderr, "ERROR (i2c/adc) failed to write\n");
                 break;
             }
-            read(file, buf, 2);
+            const size_t siz = read(file, buf, 2);
+            (void)siz;
             // fprintf(stderr, "%x\t%x\t\t",buf[0],buf[1]);
             now[i] = ((buf[0] << 4) + (buf[1] >> 4));
         }

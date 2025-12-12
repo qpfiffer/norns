@@ -12,7 +12,8 @@ void init_platform() {
 
         FILE *fptr = fopen("/sys/firmware/devicetree/base/model", "r");
         char modelString[100];
-        fgets(modelString, 100, fptr);
+        const char *val = fgets(modelString, 100, fptr);
+        (void)val;
         fclose(fptr);
 
         if (strstr(modelString, "Compute Module 3")) {
