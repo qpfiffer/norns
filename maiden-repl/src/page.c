@@ -1,3 +1,4 @@
+#pragma GCC diagnostic ignored "-Wformat-security"
 #include "page.h"
 #include <ncurses.h>
 #include <panel.h>

@@ -1,3 +1,4 @@
+#pragma GCC diagnostic ignored "-Wformat-security"
 #include "pages.h"
 #include "page.h"
 

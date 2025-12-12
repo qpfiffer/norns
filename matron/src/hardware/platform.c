@@ -23,6 +23,8 @@ void init_platform() {
             p = PLATFORM_CM4;
         } else if (strstr(modelString, "Raspberry Pi 3")) {
             p = PLATFORM_PI3;
+        } else if (strstr(modelString, "OrangePi 3 LTS")) {
+            p = PLATFORM_PI3;
         } else if (strstr(modelString, "Raspberry Pi 4")) {
             p = PLATFORM_PI4;
         } else {
