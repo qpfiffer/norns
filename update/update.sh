@@ -10,34 +10,28 @@ then
 fi;
 
 # basic repo updates
-sudo rm -rf /home/we/norns
-cp -a norns /home/we/
-sudo rm -rf /home/we/maiden
-cp -a maiden /home/we/
-sudo rm -rf /home/we/bin/maiden-repl
-sudo cp -a /home/we/norns/build/maiden-repl/maiden-repl /home/we/bin/
+#rsync -Paz norns /home/we/
+mkdir -p /home/we/bin
+rsync -Paz maiden /home/we/
+rsync -Paz /home/we/norns/build/maiden-repl/maiden-repl /home/we/bin/
 
 # version/changelog
 cp version.txt /home/we/
 cp changelog.txt /home/we/
 
 # remove logging
-sudo apt -y remove rsyslog
-sudo cp config/logrotate.conf /etc/
-sudo cp config/journald.conf /etc/systemd/
-sudo rm -rf /var/log/journal
-sudo rm -rf /var/log/daemon.log
-sudo rm -rf /var/log/user.log
+#sudo apt -y remove rsyslog
+#sudo cp config/logrotate.conf /etc/
+#sudo cp config/journald.conf /etc/systemd/
+#sudo rm -rf /var/log/journal
+#sudo rm -rf /var/log/daemon.log
+#sudo rm -rf /var/log/user.log
 
 # disable hciuart
-sudo systemctl disable hciuart 
+sudo systemctl disable hciuart
 
 # update jack systemd
 sudo cp --remove-destination config/norns-jack.service /etc/systemd/system/norns-jack.service
-
-# scrub invisibles
-find ~/dust -name .DS_Store -delete
-find ~/dust -name ._.DS_Store -delete
 
 # set alsa volume
 amixer --device hw:sndrpimonome set Master 100% on
@@ -51,7 +45,7 @@ sudo sed -e '/spidev.bufsiz/! s/$/ spidev.bufsiz=8192/' -i /boot/cmdline.txt
 sudo dpkg -i package/*.deb
 
 # clean slate
-rm /home/we/matronrc.lua
+#rm /home/we/matronrc.lua
 
 # maiden project setup
 cd /home/we/maiden
