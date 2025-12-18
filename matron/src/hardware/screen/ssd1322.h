@@ -1,6 +1,10 @@
 #pragma once
 
+#ifdef __ARM_NEON__
+/* So we can build on X86 for no reason? */
 #include <arm_neon.h>
+#endif
+
 #include <cairo.h>
 #include <fcntl.h>
 #include <gpiod.h>
