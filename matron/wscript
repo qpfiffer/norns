@@ -1,5 +1,17 @@
 top = '..'
 
+def is_gentoo():
+    import subprocess
+    try:
+        val = subprocess.check_output([
+            'uname', '-r'
+        ]).decode().strip()
+        if 'gentoo' in val:
+            return True
+    except subprocess.CalledProcessError:
+        return ''
+    return False
+
 def build(bld):
     matron_sources = [
         'src/config.c',
@@ -61,6 +73,10 @@ def build(bld):
         'm',
     ]
 
+    LUANAME = "LUA53"
+    if is_gentoo():
+        LUANAME = "LUA5.3"
+
     matron_use = [
         'ALSA',
         'LIBUDEV',
@@ -68,13 +84,19 @@ def build(bld):
         'LIBGPIOD',
         'CAIRO',
         'CAIRO-FT',
-        'LUA53',
+        LUANAME,
         'LIBLO',
         'LIBMONOME',
         'SNDFILE',
-        'AVAHI-COMPAT-LIBDNS_SD',
         'JACK',
     ]
+
+    # Gentoo AVahi needs to be build with the Avahi 'mdnsresponder-compat' flag,
+    # which is it's own package on *bian systems.
+    if is_gentoo():
+        matron_use.append('AVAHI')
+    else:
+        matron_use.append('AVAHI-COMPAT-LIBDNS_SD')
 
     if bld.env.NORNS_DESKTOP:
         matron_libs.append('SDL2')
