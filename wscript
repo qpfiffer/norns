@@ -1,6 +1,18 @@
 top = '.'
 out = 'build'
 
+def is_gentoo():
+    import subprocess
+    try:
+        val = subprocess.check_output([
+            'uname', '-r'
+        ]).decode().strip()
+        if 'gentoo' in val:
+            return True
+    except subprocess.CalledProcessError:
+        return ''
+    return False
+
 def get_version_hash():
     import subprocess
     try:
@@ -20,6 +32,10 @@ def options(opt):
     opt.recurse('maiden-repl')
 
 def configure(conf):
+    LUANAME = "lua53"
+    if is_gentoo():
+        LUANAME = "lua5.3"
+
     conf.load('compiler_c compiler_cxx')
 
     conf.define('VERSION_MAJOR', 0)
@@ -41,7 +57,7 @@ def configure(conf):
     conf.check_cfg(package='liblo', args=['--cflags', '--libs'])
     conf.check_cfg(package='cairo', args=['--cflags', '--libs'])
     conf.check_cfg(package='cairo-ft', args=['--cflags', '--libs'])
-    conf.check_cfg(package='lua53', args=['--cflags', '--libs'])
+    conf.check_cfg(package=LUANAME, args=['--cflags', '--libs'])
     conf.check_cfg(package='nanomsg', args=['--cflags', '--libs'])
     conf.check_cfg(package='avahi-compat-libdns_sd', args=['--cflags', '--libs'])
     conf.check_cfg(package='sndfile', args=['--cflags', '--libs'])
