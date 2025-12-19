@@ -31,7 +31,8 @@ def build(bld):
         'src/hardware/platform.c',
         'src/hardware/screen.c',
         'src/hardware/stat.c',
-        'src/hardware/screen/ssd1322.c',
+        # 'src/hardware/screen/ssd1322.c',
+        'src/hardware/screen/ssd1322_stub.c',
         'src/hardware/input/gpio.c',
         'src/args.c',
         'src/events.c',
@@ -79,6 +80,7 @@ def build(bld):
 
     matron_use = [
         'ALSA',
+        'AVAHI-COMPAT-LIBDNS_SD',
         'LIBUDEV',
         'LIBEVDEV',
         'LIBGPIOD',
@@ -90,13 +92,6 @@ def build(bld):
         'SNDFILE',
         'JACK',
     ]
-
-    # Gentoo AVahi needs to be build with the Avahi 'mdnsresponder-compat' flag,
-    # which is it's own package on *bian systems.
-    if is_gentoo():
-        matron_use.append('AVAHI')
-    else:
-        matron_use.append('AVAHI-COMPAT-LIBDNS_SD')
 
     if bld.env.NORNS_DESKTOP:
         matron_libs.append('SDL2')
