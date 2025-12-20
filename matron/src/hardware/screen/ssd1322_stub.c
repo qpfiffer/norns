@@ -1,7 +1,8 @@
 // vim: noet ts=4 sw=4
 #include "ssd1322.h"
 
-// static struct gpiod_chip *gpio_0 = NULL;
+static uint32_t *surface_buffer = NULL;
+
 static struct gpiod_request *gpio_dc = NULL;
 static struct gpiod_request *gpio_reset = NULL;
 
