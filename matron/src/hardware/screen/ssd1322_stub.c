@@ -132,7 +132,7 @@ void ssd1322_init() {
 
 	// SSD1322 Reference Document (v1.2) P 16/60
 	// "Keep this pin pull HIGH during normal operation"
-	gpiod_line_request_set_values(gpio_reset, 1);
+	gpiod_line_request_set_values(gpio_reset, ACTIVE_VALUE);
 
 	// All values copied from fbtft-ssd1322.c from monome/linux repo.
 	// write_command(SSD1322_SET_DISPLAY_OFF);
