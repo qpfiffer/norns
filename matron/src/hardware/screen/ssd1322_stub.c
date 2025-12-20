@@ -1,6 +1,12 @@
 // vim: noet ts=4 sw=4
 #include "ssd1322.h"
 
+#define SPIDEV_BUFFER_LEN SSD1322_PIXEL_WIDTH *SSD1322_PIXEL_HEIGHT * sizeof(uint8_t)
+#define SURFACE_BUFFER_LEN SSD1322_PIXEL_WIDTH *SSD1322_PIXEL_HEIGHT * sizeof(uint32_t)
+
+static int spidev_fd = 0;
+
+static uint8_t *spidev_buffer = NULL;
 static uint32_t *surface_buffer = NULL;
 
 static struct gpiod_request *gpio_dc = NULL;
