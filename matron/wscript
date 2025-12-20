@@ -78,6 +78,12 @@ def build(bld):
     LUANAME = "LUA53"
     if is_gentoo():
         LUANAME = "LUA5.3"
+    else:
+        matron_includes += [
+            '/usr/include/glib-2.0',
+            '/usr/lib/aarch64-linux-gnu/glib-2.0/include',
+            '/usr/include/sysprof-6'
+        ]
 
     matron_use = [
         'ALSA',
