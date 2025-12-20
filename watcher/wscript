@@ -14,6 +14,7 @@ def build(bld):
     ]
 
     watcher_use = [
+        'AVAHI-COMPAT-LIBDNS_SD',
         'LIBUDEV',
         'LIBEVDEV',
     ]
