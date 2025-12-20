@@ -57,7 +57,8 @@ int ssd1322_write_command(uint8_t command, uint8_t data_len, ...) {
         goto fail;
     }
 
-    gpiod_line_set_value(gpio_dc, 0);
+    //gpiod_line_set_value(gpio_dc, 0);
+    gpiod_line_request_set_value(gpio_dc, 0);
 
     cmd_buf[0] = command;
     cmd_transfer.tx_buf = (unsigned long)cmd_buf;

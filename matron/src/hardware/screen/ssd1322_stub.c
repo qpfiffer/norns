@@ -1,5 +1,7 @@
 #include "ssd1322.h"
 
+static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+
 void ssd1322_init() {
 }
 
