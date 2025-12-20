@@ -1,8 +1,13 @@
 // vim: noet ts=4 sw=4
 #include "ssd1322.h"
 
+#include "event_types.h"
+#include "events.h"
+
 #define SPIDEV_BUFFER_LEN SSD1322_PIXEL_WIDTH *SSD1322_PIXEL_HEIGHT * sizeof(uint8_t)
 #define SURFACE_BUFFER_LEN SSD1322_PIXEL_WIDTH *SSD1322_PIXEL_HEIGHT * sizeof(uint32_t)
+
+static bool display_dirty = false;
 
 static int spidev_fd = 0;
 
@@ -13,6 +18,7 @@ static struct gpiod_line_request *gpio_dc = NULL;
 static struct gpiod_line_request *gpio_reset = NULL;
 
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_t ssd1322_pthread_t = {0};
 
 int _open_spi() {
 	uint8_t mode = SPI_MODE_0;
