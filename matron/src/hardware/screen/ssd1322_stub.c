@@ -14,10 +14,34 @@ static struct gpiod_request *gpio_reset = NULL;
 
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
+int _open_spi() {
+	uint8_t mode = SPI_MODE_0;
+	uint8_t bits_per_word = SPI0_BUS_WIDTH;
+	uint8_t little_endian = 0;
+	uint32_t speed_hz = 1200000000 / 64; // 18.75Mhz, 1200Mhz is the CPU speed.
+
+	int fd = open(SPIDEV_0_0_PATH, O_RDWR | O_SYNC);
+
+	if (fd < 0) {
+		fprintf(stderr, "(screen) couldn't open %s\n", SPIDEV_0_0_PATH);
+		return -1;
+	}
+
+	int outcome = 0 || (ioctl(fd, SPI_IOC_WR_MODE, &mode) < 0) || (ioctl(fd, SPI_IOC_WR_BITS_PER_WORD, &bits_per_word) < 0) || (ioctl(fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed_hz) < 0) || (ioctl(fd, SPI_IOC_WR_LSB_FIRST, &little_endian) < 0);
+	if (outcome != 0) {
+		fprintf(stderr, "could not set SPI WR settings via IOC\n");
+		close(fd);
+		return -1;
+	}
+
+	return fd;
+}
+
 static struct gpiod_line_request *
 _request_output_line(const char *chip_path, unsigned int offset,
 		    enum gpiod_line_value value, const char *consumer)
 {
+	/* Copied from libgpiod examples directory. */
 	struct gpiod_request_config *req_cfg = NULL;
 	struct gpiod_line_request *request = NULL;
 	struct gpiod_line_settings *settings;
@@ -88,7 +112,7 @@ void ssd1322_init() {
 		return;
 	}
 
-	spidev_fd = open_spi(SPIDEV_0_0_PATH);
+	spidev_fd = _open_spi(SPIDEV_0_0_PATH);
 	if (spidev_fd < 0) {
 		fprintf(stderr, "%s: couldn't open %s.\n", __func__, SPIDEV_0_0_PATH);
 		return;
