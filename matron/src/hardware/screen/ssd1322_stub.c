@@ -9,8 +9,8 @@ static int spidev_fd = 0;
 static uint8_t *spidev_buffer = NULL;
 static uint32_t *surface_buffer = NULL;
 
-static struct gpiod_request *gpio_dc = NULL;
-static struct gpiod_request *gpio_reset = NULL;
+static struct gpiod_line_request *gpio_dc = NULL;
+static struct gpiod_line_request *gpio_reset = NULL;
 
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
