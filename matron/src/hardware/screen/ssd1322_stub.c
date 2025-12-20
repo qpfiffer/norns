@@ -94,6 +94,31 @@ close_chip:
 	return request;
 }
 
+static void *ssd1322_thread_run(void *p) {
+	(void)p;
+
+	static struct timespec ts = {
+		.tv_sec = 0,
+		.tv_nsec = 16666666, // 60Hz
+	};
+
+	while (spidev_buffer) {
+		if (display_dirty) {
+			ssd1322_refresh();
+			display_dirty = false;
+		}
+
+		// If this event happens right before ssd1322_refresh(),
+		// there is quite a bit of flashing. Possibly from being
+		// at a weird sync point with the hardware refresh.
+		event_post(event_data_new(EVENT_SCREEN_REFRESH));
+
+		clock_nanosleep(CLOCK_MONOTONIC, 0, &ts, NULL);
+	}
+
+	return NULL;
+}
+
 void ssd1322_init() {
 	if (pthread_mutex_init(&lock, NULL) != 0) {
 		fprintf(stderr, "%s: pthread_mutex_init failed\n", __func__);
