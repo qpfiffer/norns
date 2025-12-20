@@ -207,6 +207,21 @@ void ssd1322_init() {
 }
 
 void ssd1322_deinit() {
+	if (spidev_fd > 0) {
+		// Drive RST low to turn off screen.
+		enum gpiod_line_value values[] = {GPIOD_LINE_VALUE_INACTIVE};
+		gpiod_line_request_set_values(gpio_reset, values);
+
+		// Destroy file descriptors and handles.
+		pthread_mutex_destroy(&lock);
+		gpiod_line_request_release(gpio_reset);
+		gpiod_line_request_release(gpio_dc);
+		//gpiod_chip_close(gpio_0);
+		close(spidev_fd);
+
+		free(spidev_buffer);
+		spidev_buffer = NULL;
+	}
 }
 
 void ssd1322_refresh() {
