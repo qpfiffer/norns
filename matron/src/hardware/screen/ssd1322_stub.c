@@ -132,7 +132,7 @@ void ssd1322_init() {
 
 	// SSD1322 Reference Document (v1.2) P 16/60
 	// "Keep this pin pull HIGH during normal operation"
-	enum gpiod_line_value values[] = [GPIOD_LINE_VALUE_ACTIVE];
+	enum gpiod_line_value values[] = {GPIOD_LINE_VALUE_ACTIVE};
 	gpiod_line_request_set_values(gpio_reset, values);
 
 	// All values copied from fbtft-ssd1322.c from monome/linux repo.
