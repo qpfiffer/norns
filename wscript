@@ -51,6 +51,7 @@ def configure(conf):
     conf.define('_GNU_SOURCE', 1)
 
     conf.check_cfg(package='alsa', args=['--cflags', '--libs'])
+    conf.check_cfg(package='avahi-compat-libdns_sd', args=['--cflags', '--libs'])
     conf.check_cfg(package='libudev', args=['--cflags', '--libs'])
     conf.check_cfg(package='libevdev', args=['--cflags', '--libs'])
     conf.check_cfg(package='libgpiod', args=['--cflags', '--libs'])
@@ -61,9 +62,6 @@ def configure(conf):
     conf.check_cfg(package='nanomsg', args=['--cflags', '--libs'])
     conf.check_cfg(package='sndfile', args=['--cflags', '--libs'])
     conf.check_cfg(package='jack', args=['--cflags', '--libs'])
-
-    if not is_gentoo():
-        conf.check_cfg(package='avahi-compat-libdns_sd', args=['--cflags', '--libs'])
 
     conf.check_cc(msg='Checking for libmonome',
         define_name='HAVE_LIBMONOME',

@@ -70,6 +70,7 @@ def build(bld):
     ]
 
     matron_libs = [
+        'dns_sd', # Why do I have to add this? Waf is dumb.
         'pthread',
         'm',
     ]
