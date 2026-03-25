@@ -16,8 +16,9 @@
 // Pinout
 // see: https://github.com/monome/norns-image/blob/main/readme-hardware.md#pinout-1
 #define SSD1309_DC_AND_RESET_GPIO_CHIP "/dev/gpiochip0"
-#define SSD1309_DC_GPIO_LINE 26
-#define SSD1309_RESET_GPIO_LINE 25
+#define SSD1309_DC_GPIO_LINE 25
+#define SSD1309_RESET_GPIO_LINE 27
+#define SSD1309_MANUAL_CS_GPIO_LINE 24
 
 // Commands
 #define SSD1309_SET_COLUMN_ADDRESS 0x21

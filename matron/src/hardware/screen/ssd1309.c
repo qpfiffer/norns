@@ -23,18 +23,20 @@ static uint8_t *spidev_buffer = NULL;
 static uint32_t *surface_buffer = NULL;
 static struct gpiod_line_request *gpio_dc = NULL;
 static struct gpiod_line_request *gpio_reset = NULL;
+static struct gpiod_line_request *gpio_cs = NULL;
 static pthread_mutex_t lock;
 static bool lock_initialized = false;
 static pthread_t ssd1309_pthread_t;
 
 #define SPIDEV_BUFFER_LEN ((SSD1309_PIXEL_WIDTH * SSD1309_PIXEL_HEIGHT) / 8)
 #define SURFACE_BUFFER_LEN (SSD1309_PIXEL_WIDTH * SSD1309_PIXEL_HEIGHT * sizeof(uint32_t))
+#define SSD1309_COLUMN_OFFSET 2
 
 static int open_spi(void) {
     uint8_t mode = SPI_MODE_0;
     uint8_t bits_per_word = SPI0_BUS_WIDTH;
     uint8_t little_endian = 0;
-    uint32_t speed_hz = 1200000000 / 64; // 18.75Mhz, 1200Mhz is the CPU speed.
+    uint32_t speed_hz = 8000000; // faster refresh to reduce visible tearing
 
     int fd = open(SPIDEV_0_0_PATH, O_RDWR | O_SYNC);
 
@@ -124,6 +126,18 @@ static int set_output_line(struct gpiod_line_request *request, enum gpiod_line_v
     return gpiod_line_request_set_values(request, values);
 }
 
+static void cs_assert(void) {
+    if (gpio_cs && set_output_line(gpio_cs, GPIOD_LINE_VALUE_INACTIVE) != 0) {
+        fprintf(stderr, "%s: failed to assert CS\n", __func__);
+    }
+}
+
+static void cs_deassert(void) {
+    if (gpio_cs && set_output_line(gpio_cs, GPIOD_LINE_VALUE_ACTIVE) != 0) {
+        fprintf(stderr, "%s: failed to deassert CS\n", __func__);
+    }
+}
+
 static int ssd1309_write_command(uint8_t command, uint8_t data_len, ...) {
     va_list args;
     uint8_t cmd_buf[1];
@@ -136,6 +150,8 @@ static int ssd1309_write_command(uint8_t command, uint8_t data_len, ...) {
         fprintf(stderr, "%s: driver not initialized\n", __func__);
         goto fail;
     }
+
+    cs_assert();
 
     if (set_output_line(gpio_dc, GPIOD_LINE_VALUE_INACTIVE) != 0) {
         fprintf(stderr, "%s: failed to set D/C for command\n", __func__);
@@ -172,10 +188,12 @@ static int ssd1309_write_command(uint8_t command, uint8_t data_len, ...) {
         }
     }
 
+    cs_deassert();
     pthread_mutex_unlock(&lock);
     return 0;
 
 fail:
+    cs_deassert();
     pthread_mutex_unlock(&lock);
     return -1;
 }
@@ -202,7 +220,7 @@ static void surface_to_spidev_buffer(void) {
                 ? grayscale_to_binary(pixel[0], pixel[1], pixel[2])
                 : pixel[1];
 
-            if (gray >= 128) {
+            if (gray >= 8) {
                 uint32_t page = y >> 3;
                 uint32_t idx = (page * SSD1309_PIXEL_WIDTH) + x;
                 spidev_buffer[idx] |= (uint8_t)(1u << (y & 0x7u));
@@ -273,13 +291,20 @@ void ssd1309_init(void) {
         GPIOD_LINE_VALUE_INACTIVE,
         "RST"
     );
+    gpio_cs = request_output_line(
+        SSD1309_DC_AND_RESET_GPIO_CHIP,
+        SSD1309_MANUAL_CS_GPIO_LINE,
+        GPIOD_LINE_VALUE_ACTIVE,
+        "CS"
+    );
 
-    if (!gpio_dc || !gpio_reset) {
-        fprintf(stderr, "%s: couldn't request output lines for dc/rst\n", __func__);
+    if (!gpio_dc || !gpio_reset || !gpio_cs) {
+        fprintf(stderr, "%s: couldn't request output lines for dc/rst/cs\n", __func__);
         goto fail;
     }
-
-    // Hardware reset pulse.
+    // Hardware reset sequence (match known-good SSD1309 drivers): high -> low -> high.
+    set_output_line(gpio_reset, GPIOD_LINE_VALUE_ACTIVE);
+    usleep(1000);
     set_output_line(gpio_reset, GPIOD_LINE_VALUE_INACTIVE);
     usleep(10000);
     set_output_line(gpio_reset, GPIOD_LINE_VALUE_ACTIVE);
@@ -292,15 +317,10 @@ void ssd1309_init(void) {
     write_command_with_data(SSD1309_SET_DISPLAY_OFFSET, 0x00);
     write_command((uint8_t)(SSD1309_SET_DISPLAY_START_LINE | 0x00));
     write_command_with_data(SSD1309_CHARGE_PUMP, 0x14);
-    write_command_with_data(SSD1309_SET_MEMORY_MODE, 0x00);
+    write_command_with_data(SSD1309_SET_MEMORY_MODE, 0x02);
 
-    if (platform_factory()) {
-        write_command(SSD1309_SET_SEGMENT_REMAP_127);
-        write_command(SSD1309_SET_COM_SCAN_DEC);
-    } else {
-        write_command(SSD1309_SET_SEGMENT_REMAP_0);
-        write_command(SSD1309_SET_COM_SCAN_INC);
-    }
+    write_command(SSD1309_SET_SEGMENT_REMAP_0);
+    write_command(SSD1309_SET_COM_SCAN_INC);
 
     write_command_with_data(SSD1309_SET_COM_PINS_CONFIG, 0x12);
     write_command_with_data(SSD1309_SET_CONTRAST_CURRENT, 0xFF);
@@ -309,6 +329,8 @@ void ssd1309_init(void) {
     write_command(SSD1309_DEACTIVATE_SCROLL);
     write_command(SSD1309_SET_DISPLAY_MODE_ALL_OFF);
     write_command(SSD1309_SET_DISPLAY_MODE_NORMAL);
+    write_command(SSD1309_SET_DISPLAY_ON);
+    should_turn_on = false;
 
     thread_running = true;
 
@@ -348,6 +370,7 @@ void ssd1309_deinit(void) {
     if (gpio_reset) {
         set_output_line(gpio_reset, GPIOD_LINE_VALUE_INACTIVE);
     }
+    cs_deassert();
 
     if (lock_initialized) {
         pthread_mutex_destroy(&lock);
@@ -362,6 +385,11 @@ void ssd1309_deinit(void) {
     if (gpio_dc) {
         gpiod_line_request_release(gpio_dc);
         gpio_dc = NULL;
+    }
+
+    if (gpio_cs) {
+        gpiod_line_request_release(gpio_cs);
+        gpio_cs = NULL;
     }
 
     if (spidev_fd >= 0) {
@@ -410,32 +438,44 @@ void ssd1309_refresh(void) {
         return;
     }
 
-    write_command_with_data(SSD1309_SET_COLUMN_ADDRESS, 0, SSD1309_PIXEL_WIDTH - 1);
-    write_command_with_data(SSD1309_SET_PAGE_ADDRESS, 0, SSD1309_PAGE_COUNT - 1);
-
     if (should_turn_on) {
         write_command(SSD1309_SET_DISPLAY_ON);
         should_turn_on = false;
     }
 
+    write_command((uint8_t)(SSD1309_SET_DISPLAY_START_LINE | 0x00));
+    write_command_with_data(SSD1309_SET_DISPLAY_OFFSET, 0x00);
+
     pthread_mutex_lock(&lock);
-
     surface_to_spidev_buffer();
-
-    if (set_output_line(gpio_dc, GPIOD_LINE_VALUE_ACTIVE) != 0) {
-        fprintf(stderr, "%s: failed to set D/C for data\n", __func__);
-        goto early_return;
-    }
-
-    transfer.tx_buf = (unsigned long)spidev_buffer;
-    transfer.len = SPIDEV_BUFFER_LEN;
-
-    if (ioctl(spidev_fd, SPI_IOC_MESSAGE(1), &transfer) < 0) {
-        fprintf(stderr, "%s: SPI data transfer failed\n", __func__);
-    }
-
-early_return:
     pthread_mutex_unlock(&lock);
+
+    for (uint8_t page = 0; page < SSD1309_PAGE_COUNT; page++) {
+        write_command((uint8_t)(0xB0 | page));
+        write_command((uint8_t)(0x00 | (SSD1309_COLUMN_OFFSET & 0x0F)));
+        write_command((uint8_t)(0x10 | ((SSD1309_COLUMN_OFFSET >> 4) & 0x0F)));
+
+        pthread_mutex_lock(&lock);
+        if (set_output_line(gpio_dc, GPIOD_LINE_VALUE_ACTIVE) != 0) {
+            fprintf(stderr, "%s: failed to set D/C for data\n", __func__);
+            pthread_mutex_unlock(&lock);
+            break;
+        }
+
+        cs_assert();
+        transfer.tx_buf = (unsigned long)(spidev_buffer + (page * SSD1309_PIXEL_WIDTH));
+        transfer.len = SSD1309_PIXEL_WIDTH;
+
+        if (ioctl(spidev_fd, SPI_IOC_MESSAGE(1), &transfer) < 0) {
+            fprintf(stderr, "%s: SPI page transfer failed (%u)\n", __func__, page);
+            cs_deassert();
+            pthread_mutex_unlock(&lock);
+            break;
+        }
+
+        cs_deassert();
+        pthread_mutex_unlock(&lock);
+    }
 }
 
 void ssd1309_set_brightness(uint8_t value) {
