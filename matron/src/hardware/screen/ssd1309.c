@@ -30,13 +30,14 @@ static pthread_t ssd1309_pthread_t;
 
 #define SPIDEV_BUFFER_LEN ((SSD1309_PIXEL_WIDTH * SSD1309_PIXEL_HEIGHT) / 8)
 #define SURFACE_BUFFER_LEN (SSD1309_PIXEL_WIDTH * SSD1309_PIXEL_HEIGHT * sizeof(uint32_t))
-#define SSD1309_COLUMN_OFFSET 2
+#define SSD1309_COLUMN_OFFSET 0
 
 static int open_spi(void) {
     uint8_t mode = SPI_MODE_0;
     uint8_t bits_per_word = SPI0_BUS_WIDTH;
     uint8_t little_endian = 0;
-    uint32_t speed_hz = 8000000; // faster refresh to reduce visible tearing
+    //uint32_t speed_hz = 8000000; // faster refresh to reduce visible tearing
+    uint32_t speed_hz = 10000000; // faster refresh to reduce visible tearing
 
     int fd = open(SPIDEV_0_0_PATH, O_RDWR | O_SYNC);
 
@@ -213,6 +214,15 @@ static inline uint8_t grayscale_to_binary(uint8_t b, uint8_t g, uint8_t r) {
 static void surface_to_spidev_buffer(void) {
     memset(spidev_buffer, 0, SPIDEV_BUFFER_LEN);
 
+    //spidev_buffer[0] = 0xFF;
+    //spidev_buffer[0] = 1 << 7;
+    //spidev_buffer[1] = 1;
+
+    //spidev_buffer[0] |= 1;
+    //spidev_buffer[1] |= 1;
+    //spidev_buffer[2] |= 1;
+    //spidev_buffer[3] |= 1;
+
     for (uint32_t y = 0; y < SSD1309_PIXEL_HEIGHT; y++) {
         for (uint32_t x = 0; x < SSD1309_PIXEL_WIDTH; x++) {
             uint8_t *pixel = (uint8_t *)&surface_buffer[(y * SSD1309_PIXEL_WIDTH) + x];
@@ -220,6 +230,8 @@ static void surface_to_spidev_buffer(void) {
                 ? grayscale_to_binary(pixel[0], pixel[1], pixel[2])
                 : pixel[1];
 
+            uint32_t page = y >> 3;
+            uint32_t idx = (page * SSD1309_PIXEL_WIDTH) + x;
             if (gray >= 8) {
                 uint32_t page = y >> 3;
                 uint32_t idx = (page * SSD1309_PIXEL_WIDTH) + x;
@@ -312,24 +324,29 @@ void ssd1309_init(void) {
 
     // Keep command order aligned with known-good SSD1309 init sequences.
     write_command(SSD1309_SET_DISPLAY_OFF);
-    write_command_with_data(SSD1309_SET_DISPLAY_CLOCK_DIV, 0x80);
-    write_command_with_data(SSD1309_SET_MULTIPLEX_RATIO, 0x3F);
+    write_command_with_data(SSD1309_SET_DISPLAY_CLOCK_DIV, 0x3C);
+    //write_command_with_data(SSD1309_SET_DISPLAY_CLOCK_DIV, 0x80);
+    write_command_with_data(SSD1309_SET_MULTIPLEX_RATIO, SSD1309_PIXEL_HEIGHT - 1);
     write_command_with_data(SSD1309_SET_DISPLAY_OFFSET, 0x00);
-    write_command((uint8_t)(SSD1309_SET_DISPLAY_START_LINE | 0x00));
+    write_command(SSD1309_SET_DISPLAY_START_LINE);
     write_command_with_data(SSD1309_CHARGE_PUMP, 0x14);
+    //write_command(SSD1309_SET_MEMORY_MODE);
     write_command_with_data(SSD1309_SET_MEMORY_MODE, 0x02);
 
-    write_command(SSD1309_SET_SEGMENT_REMAP_0);
-    write_command(SSD1309_SET_COM_SCAN_INC);
+    //write_command(SSD1309_SET_SEGMENT_REMAP_0);
+    //write_command(SSD1309_SET_COM_SCAN_INC);
 
     write_command_with_data(SSD1309_SET_COM_PINS_CONFIG, 0x12);
-    write_command_with_data(SSD1309_SET_CONTRAST_CURRENT, 0xFF);
+    //write_command_with_data(SSD1309_SET_CONTRAST_CURRENT, 0xFF);
+    write_command_with_data(SSD1309_SET_CONTRAST_CURRENT, 0x80);
     write_command_with_data(SSD1309_SET_PRECHARGE_PERIOD, 0xF1);
     write_command_with_data(SSD1309_SET_VCOM_DESELECT_LEVEL, 0x40);
     write_command(SSD1309_DEACTIVATE_SCROLL);
+
     write_command(SSD1309_SET_DISPLAY_MODE_ALL_OFF);
     write_command(SSD1309_SET_DISPLAY_MODE_NORMAL);
     write_command(SSD1309_SET_DISPLAY_ON);
+
     should_turn_on = false;
 
     thread_running = true;
@@ -443,17 +460,16 @@ void ssd1309_refresh(void) {
         should_turn_on = false;
     }
 
-    write_command((uint8_t)(SSD1309_SET_DISPLAY_START_LINE | 0x00));
-    write_command_with_data(SSD1309_SET_DISPLAY_OFFSET, 0x00);
-
     pthread_mutex_lock(&lock);
     surface_to_spidev_buffer();
     pthread_mutex_unlock(&lock);
 
     for (uint8_t page = 0; page < SSD1309_PAGE_COUNT; page++) {
-        write_command((uint8_t)(0xB0 | page));
-        write_command((uint8_t)(0x00 | (SSD1309_COLUMN_OFFSET & 0x0F)));
-        write_command((uint8_t)(0x10 | ((SSD1309_COLUMN_OFFSET >> 4) & 0x0F)));
+        write_command(0xB0 + page);
+        // Set low column:
+        write_command_with_data(0x00, 0x00);
+        // Set high column:
+        write_command_with_data(0x10, 0x00);
 
         pthread_mutex_lock(&lock);
         if (set_output_line(gpio_dc, GPIOD_LINE_VALUE_ACTIVE) != 0) {
