@@ -139,10 +139,14 @@ static void cs_deassert(void) {
     }
 }
 
+// On the SSD1309 (unlike the SSD1322) a command and its parameters are a single
+// command-stream burst: D/C stays LOW for the whole thing. Raising D/C for the
+// parameters writes them into GDDRAM instead, which leaves the command itself
+// waiting -- it then swallows the *next* command as its parameter and the rest
+// of the init sequence silently shifts by one.
 static int ssd1309_write_command(uint8_t command, uint8_t data_len, ...) {
     va_list args;
-    uint8_t cmd_buf[1];
-    uint8_t data_buf[256];
+    uint8_t cmd_buf[257];
     struct spi_ioc_transfer transfer = {0};
 
     pthread_mutex_lock(&lock);
@@ -152,41 +156,27 @@ static int ssd1309_write_command(uint8_t command, uint8_t data_len, ...) {
         goto fail;
     }
 
-    cs_assert();
+    cmd_buf[0] = command;
+
+    va_start(args, data_len);
+    for (uint8_t i = 0; i < data_len; i++) {
+        cmd_buf[1 + i] = (uint8_t)va_arg(args, int);
+    }
+    va_end(args);
 
     if (set_output_line(gpio_dc, GPIOD_LINE_VALUE_INACTIVE) != 0) {
         fprintf(stderr, "%s: failed to set D/C for command\n", __func__);
         goto fail;
     }
 
-    cmd_buf[0] = command;
+    cs_assert();
+
     transfer.tx_buf = (unsigned long)cmd_buf;
-    transfer.len = (uint32_t)sizeof(cmd_buf);
+    transfer.len = (uint32_t)data_len + 1u;
 
     if (ioctl(spidev_fd, SPI_IOC_MESSAGE(1), &transfer) < 0) {
         fprintf(stderr, "%s: could not send command\n", __func__);
         goto fail;
-    }
-
-    if (data_len > 0) {
-        if (set_output_line(gpio_dc, GPIOD_LINE_VALUE_ACTIVE) != 0) {
-            fprintf(stderr, "%s: failed to set D/C for data\n", __func__);
-            goto fail;
-        }
-
-        va_start(args, data_len);
-        for (uint8_t i = 0; i < data_len; i++) {
-            data_buf[i] = (uint8_t)va_arg(args, int);
-        }
-        va_end(args);
-
-        transfer.tx_buf = (unsigned long)data_buf;
-        transfer.len = (uint32_t)data_len;
-
-        if (ioctl(spidev_fd, SPI_IOC_MESSAGE(1), &transfer) < 0) {
-            fprintf(stderr, "%s: could not send command data\n", __func__);
-            goto fail;
-        }
     }
 
     cs_deassert();
@@ -214,15 +204,6 @@ static inline uint8_t grayscale_to_binary(uint8_t b, uint8_t g, uint8_t r) {
 static void surface_to_spidev_buffer(void) {
     memset(spidev_buffer, 0, SPIDEV_BUFFER_LEN);
 
-    //spidev_buffer[0] = 0xFF;
-    //spidev_buffer[0] = 1 << 7;
-    //spidev_buffer[1] = 1;
-
-    //spidev_buffer[0] |= 1;
-    //spidev_buffer[1] |= 1;
-    //spidev_buffer[2] |= 1;
-    //spidev_buffer[3] |= 1;
-
     for (uint32_t y = 0; y < SSD1309_PIXEL_HEIGHT; y++) {
         for (uint32_t x = 0; x < SSD1309_PIXEL_WIDTH; x++) {
             uint8_t *pixel = (uint8_t *)&surface_buffer[(y * SSD1309_PIXEL_WIDTH) + x];
@@ -230,8 +211,6 @@ static void surface_to_spidev_buffer(void) {
                 ? grayscale_to_binary(pixel[0], pixel[1], pixel[2])
                 : pixel[1];
 
-            uint32_t page = y >> 3;
-            uint32_t idx = (page * SSD1309_PIXEL_WIDTH) + x;
             if (gray >= 8) {
                 uint32_t page = y >> 3;
                 uint32_t idx = (page * SSD1309_PIXEL_WIDTH) + x;
@@ -324,20 +303,14 @@ void ssd1309_init(void) {
 
     // Keep command order aligned with known-good SSD1309 init sequences.
     write_command(SSD1309_SET_DISPLAY_OFF);
-    write_command_with_data(SSD1309_SET_DISPLAY_CLOCK_DIV, 0x3C);
-    //write_command_with_data(SSD1309_SET_DISPLAY_CLOCK_DIV, 0x80);
+    write_command_with_data(SSD1309_SET_DISPLAY_CLOCK_DIV, 0x80);
     write_command_with_data(SSD1309_SET_MULTIPLEX_RATIO, SSD1309_PIXEL_HEIGHT - 1);
     write_command_with_data(SSD1309_SET_DISPLAY_OFFSET, 0x00);
     write_command(SSD1309_SET_DISPLAY_START_LINE);
     write_command_with_data(SSD1309_CHARGE_PUMP, 0x14);
-    //write_command(SSD1309_SET_MEMORY_MODE);
+    // Page addressing mode; ssd1309_refresh() sets page/column explicitly.
     write_command_with_data(SSD1309_SET_MEMORY_MODE, 0x02);
-
-    //write_command(SSD1309_SET_SEGMENT_REMAP_0);
-    //write_command(SSD1309_SET_COM_SCAN_INC);
-
     write_command_with_data(SSD1309_SET_COM_PINS_CONFIG, 0x12);
-    //write_command_with_data(SSD1309_SET_CONTRAST_CURRENT, 0xFF);
     write_command_with_data(SSD1309_SET_CONTRAST_CURRENT, 0x80);
     write_command_with_data(SSD1309_SET_PRECHARGE_PERIOD, 0xF1);
     write_command_with_data(SSD1309_SET_VCOM_DESELECT_LEVEL, 0x40);
@@ -465,11 +438,10 @@ void ssd1309_refresh(void) {
     pthread_mutex_unlock(&lock);
 
     for (uint8_t page = 0; page < SSD1309_PAGE_COUNT; page++) {
-        write_command(0xB0 + page);
-        // Set low column:
-        write_command_with_data(0x00, 0x00);
-        // Set high column:
-        write_command_with_data(0x10, 0x00);
+        // Page/column address are all single-byte commands.
+        write_command((uint8_t)(0xB0 | page));
+        write_command((uint8_t)(0x00 | (SSD1309_COLUMN_OFFSET & 0x0F)));
+        write_command((uint8_t)(0x10 | ((SSD1309_COLUMN_OFFSET >> 4) & 0x0F)));
 
         pthread_mutex_lock(&lock);
         if (set_output_line(gpio_dc, GPIOD_LINE_VALUE_ACTIVE) != 0) {
