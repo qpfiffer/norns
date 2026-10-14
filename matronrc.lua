@@ -1,8 +1,8 @@
 function init_norns()
   _boot.add_io('keys:gpio',    {dev='/dev/input/by-path/platform-keys-event'})
-  _boot.add_io('enc:gpio',     {dev='/dev/input/by-path/platform-soc:knob1-event', index=1})
-  _boot.add_io('enc:gpio',     {dev='/dev/input/by-path/platform-soc:knob2-event', index=2})
-  _boot.add_io('enc:gpio',     {dev='/dev/input/by-path/platform-soc:knob3-event', index=3})
+  _boot.add_io('enc:gpio',     {dev='/dev/input/by-path/platform-knob1-event', index=1})
+  _boot.add_io('enc:gpio',     {dev='/dev/input/by-path/platform-knob2-event', index=2})
+  _boot.add_io('enc:gpio',     {dev='/dev/input/by-path/platform-knob3-event', index=3})
 end
 
 function init_desktop()

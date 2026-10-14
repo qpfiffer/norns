@@ -1,0 +1,124 @@
+// Device-tree overlay: three KY-040 rotary encoders with push switches,
+// standing in for the stock norns keys and encoders on a Raspberry Pi 5.
+//
+// Creates the same style of input devices the stock norns kernel overlay
+// provides, so matron's existing `keys:gpio` / `enc:gpio` backends work
+// unchanged:
+//
+//   /dev/input/by-path/platform-keys-event    gpio-keys, codes 1/2/3
+//   /dev/input/by-path/platform-knob1-event   rotary-encoder, REL_X +/-1
+//   /dev/input/by-path/platform-knob2-event
+//   /dev/input/by-path/platform-knob3-event
+//
+// Pin assignment (BCM numbering):
+//   knob1: A=GPIO4   B=GPIO17  switch(K1)=GPIO22
+//   knob2: A=GPIO5   B=GPIO6   switch(K2)=GPIO13
+//   knob3: A=GPIO16  B=GPIO26  switch(K3)=GPIO12
+//
+// All lines get internal pull-ups; the KY-040 pulls them to ground.
+// If an encoder turns the wrong way, swap its A/B (CLK/DT) wires.
+//
+// Build + install (on the Pi):
+//   dtc -@ -I dts -O dtb -o norns-ky040.dtbo norns-ky040-overlay.dts
+//   sudo cp norns-ky040.dtbo /boot/firmware/overlays/
+//   echo 'dtoverlay=norns-ky040' | sudo tee -a /boot/firmware/config.txt
+
+/dts-v1/;
+/plugin/;
+
+/ {
+    compatible = "brcm,bcm2712";
+
+    fragment@0 {
+        target = <&gpio>;
+        __overlay__ {
+            norns_keys_pins: norns_keys_pins {
+                brcm,pins = <22 13 12>;
+                brcm,function = <0 0 0>; /* input */
+                brcm,pull = <2 2 2>;     /* pull-up */
+            };
+            norns_knob1_pins: norns_knob1_pins {
+                brcm,pins = <4 17>;
+                brcm,function = <0 0>;
+                brcm,pull = <2 2>;
+            };
+            norns_knob2_pins: norns_knob2_pins {
+                brcm,pins = <5 6>;
+                brcm,function = <0 0>;
+                brcm,pull = <2 2>;
+            };
+            norns_knob3_pins: norns_knob3_pins {
+                brcm,pins = <16 26>;
+                brcm,function = <0 0>;
+                brcm,pull = <2 2>;
+            };
+        };
+    };
+
+    fragment@1 {
+        target-path = "/";
+        __overlay__ {
+            keys: keys {
+                compatible = "gpio-keys";
+                pinctrl-names = "default";
+                pinctrl-0 = <&norns_keys_pins>;
+                status = "okay";
+
+                key1 {
+                    gpios = <&gpio 22 1>; /* GPIO_ACTIVE_LOW */
+                    linux,code = <1>;
+                    label = "norns key 1";
+                    debounce-interval = <10>; /* ms */
+                };
+                key2 {
+                    gpios = <&gpio 13 1>;
+                    linux,code = <2>;
+                    label = "norns key 2";
+                    debounce-interval = <10>;
+                };
+                key3 {
+                    gpios = <&gpio 12 1>;
+                    linux,code = <3>;
+                    label = "norns key 3";
+                    debounce-interval = <10>;
+                };
+            };
+
+            knob1: knob1 {
+                compatible = "rotary-encoder";
+                pinctrl-names = "default";
+                pinctrl-0 = <&norns_knob1_pins>;
+                status = "okay";
+                gpios = <&gpio 4 0>, <&gpio 17 0>;
+                linux,axis = <0>; /* REL_X */
+                rotary-encoder,encoding = "gray";
+                rotary-encoder,steps-per-period = <1>; /* one event per detent */
+                rotary-encoder,relative-axis;
+            };
+
+            knob2: knob2 {
+                compatible = "rotary-encoder";
+                pinctrl-names = "default";
+                pinctrl-0 = <&norns_knob2_pins>;
+                status = "okay";
+                gpios = <&gpio 5 0>, <&gpio 6 0>;
+                linux,axis = <0>;
+                rotary-encoder,encoding = "gray";
+                rotary-encoder,steps-per-period = <1>;
+                rotary-encoder,relative-axis;
+            };
+
+            knob3: knob3 {
+                compatible = "rotary-encoder";
+                pinctrl-names = "default";
+                pinctrl-0 = <&norns_knob3_pins>;
+                status = "okay";
+                gpios = <&gpio 16 0>, <&gpio 26 0>;
+                linux,axis = <0>;
+                rotary-encoder,encoding = "gray";
+                rotary-encoder,steps-per-period = <1>;
+                rotary-encoder,relative-axis;
+            };
+        };
+    };
+};
